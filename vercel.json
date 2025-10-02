@@ -1,0 +1,24 @@
+{
+  "builds": [
+    {
+      "src": "edoo-connect/frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": { "outputDirectory": "dist" }
+    },
+    {
+      "src": "edoo-connect-deploy/app.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "15mb", "runtime": "python3.9" }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "edoo-connect-deploy/app.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "edoo-connect/frontend/$1"
+    }
+  ]
+}
