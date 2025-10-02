@@ -4,14 +4,12 @@
     {
       "src": "edoo-connect-deploy/src/main.py",
       "use": "@vercel/python",
-      "config": { "maxLambdaSize": "15mb", "runtime": "python3.9" },
-      "root": "edoo-connect-deploy"
+      "config": { "maxLambdaSize": "15mb", "runtime": "python3.9" }
     },
     {
       "src": "frontend/package.json",
       "use": "@vercel/static-build",
-      "config": { "outputDirectory": "dist" },
-      "root": "frontend"
+      "config": { "outputDirectory": "dist" }
     }
   ],
   "routes": [
