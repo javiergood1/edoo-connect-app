@@ -4,7 +4,8 @@
     {
       "src": "edoo-connect-deploy/src/main.py",
       "use": "@vercel/python",
-      "config": { "maxLambdaSize": "15mb", "runtime": "python3.9" }
+      "config": { "maxLambdaSize": "15mb", "runtime": "python3.9" },
+      "buildCommand": "cd edoo-connect-deploy && pip install --no-deps -r requirements.txt"
     },
     {
       "src": "frontend/package.json",
