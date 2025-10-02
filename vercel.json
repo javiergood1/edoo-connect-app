@@ -1,7 +1,7 @@
 {
   "builds": [
     {
-      "src": "edoo-connect/frontend/package.json",
+      "src": "frontend/package.json",
       "use": "@vercel/static-build",
       "config": { "outputDirectory": "dist" }
     },
@@ -18,7 +18,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "edoo-connect/frontend/$1"
+      "dest": "frontend/$1"
     }
   ]
 }
