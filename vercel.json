@@ -4,6 +4,10 @@
     {
       "src": "edoo-connect-deploy/src/main.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "edoo-connect-deploy/static/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
