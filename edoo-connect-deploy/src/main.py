@@ -1,4 +1,3 @@
-
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 import os
@@ -11,7 +10,7 @@ from supabase import create_client, Client
 import traceback
 
 app = Flask(__name__)
-CORS(app, origins=["*"])
+CORS(app, origins=["*"]) # Consider restricting origins in production
 
 # Supabase Configuration
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -37,7 +36,8 @@ def require_auth(f):
             token = auth_header.split(" ")[1]
             # Supabase handles JWT verification internally when getting user
             user_response = supabase.auth.get_user(token)
-            if not user_response.user:
+            if user_response.user is None:
+                # If user is None, it means the token is invalid or expired
                 return jsonify({"success": False, "message": "Token inválido o expirado"}), 401
             
             request.user_id = user_response.user.id
@@ -215,8 +215,26 @@ def register():
                     }
                 }
             }), 201
+        elif response.session and response.session.user:
+            # This case handles when a user is already registered and tries to sign up again
+            # Supabase returns a session for the existing user in this scenario
+            return jsonify({
+                'success': False,
+                'message': 'El usuario ya está registrado. Por favor, inicia sesión.',
+                'data': {
+                    'user': {
+                        'id': response.session.user.id,
+                        'email': response.session.user.email,
+                    }
+                }
+            }), 409 # Conflict status code
         else:
-            error_message = response.json().get('msg', 'Unknown error during registration')
+            # Handle other errors from Supabase
+            error_message = "Error desconocido durante el registro"
+            if response.json() and 'msg' in response.json():
+                error_message = response.json()['msg']
+            elif response.error:
+                error_message = response.error.message
             return jsonify({'success': False, 'message': error_message}), 400
 
     except Exception as e:
@@ -257,7 +275,12 @@ def login():
                 }
             }), 200
         else:
-            error_message = response.json().get('msg', 'Credenciales inválidas')
+            # Handle other errors from Supabase, e.g., invalid credentials
+            error_message = "Credenciales inválidas"
+            if response.json() and 'msg' in response.json():
+                error_message = response.json()['msg']
+            elif response.error:
+                error_message = response.error.message
             return jsonify({'success': False, 'message': error_message}), 401
 
     except Exception as e:
@@ -326,7 +349,9 @@ def save_simulation():
                 'message': 'Datos guardados exitosamente'
             })
         else:
-            return jsonify({'success': False, 'message': 'Error al guardar simulación'}), 500
+            # Supabase client might return an empty data list even on success for insert/update
+            # A more robust check would be to verify status code or re-fetch
+            return jsonify({'success': False, 'message': 'Error al guardar simulación o no se pudo verificar la operación'}), 500
     
     except Exception as e:
         print(f"Error in save_simulation: {e}")
@@ -419,88 +444,63 @@ def get_current_report():
 def create_checkout_session():
     """Crear sesión de pago (demo)"""
     # In a real application, integrate with a payment gateway like Stripe
-    return jsonify({
-        'success': True,
-        'data': {
-            'checkout_url': 'https://checkout.stripe.com/pay/demo#demo-payment-success' # Placeholder
-        },
-        'message': 'Sesión de pago creada (demo)'
-    })
-
-@app.route('/api/payments/plan', methods=['GET'])
-@require_auth
-def get_user_plan():
-    """Obtener plan del usuario"""
     try:
-        user_id = request.user_id
-        # Assuming 'profiles' table has 'is_premium' column linked to auth.users
-        response = supabase.table('profiles').select('is_premium').eq('id', user_id).single().execute()
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'Datos requeridos'}), 400
         
-        if response.data:
-            is_premium = response.data.get('is_premium', False)
-            return jsonify({
-                'success': True,
-                'data': {
-                    'plan': 'premium' if is_premium else 'free',
-                    'is_premium': is_premium
-                }
-            })
-        else:
-            # Default to free if profile not found
-            return jsonify({
-                'success': True,
-                'data': {
-                    'plan': 'free',
-                    'is_premium': False
-                }
-            })
-    
+        amount = data.get('amount')
+        currency = data.get('currency', 'usd')
+        description = data.get('description', 'EdooConnect Premium Plan')
+
+        # Simulate creating a checkout session
+        session_id = f"cs_{hashlib.sha256(os.urandom(64)).hexdigest()}"
+        payment_url = f"https://example.com/checkout/{session_id}"
+
+        return jsonify({
+            'success': True,
+            'message': 'Sesión de pago creada (demo )',
+            'data': {
+                'sessionId': session_id,
+                'paymentUrl': payment_url,
+                'amount': amount,
+                'currency': currency,
+                'description': description
+            }
+        }), 200
+
     except Exception as e:
-        print(f"Error in get_user_plan: {e}")
+        print(f"Error in create_checkout_session: {e}")
         traceback.print_exc()
         return jsonify({'success': False, 'message': 'Error interno del servidor'}), 500
 
-# Servir archivos estáticos del frontend
-@app.route('/assets/<path:filename>')
-def serve_assets(filename):
-    """Servir archivos de assets (CSS, JS, etc.)"""
-    return send_from_directory(os.path.join(STATIC_DIR, 'assets'), filename)
+@app.route('/api/payments/webhook', methods=['POST'])
+def payment_webhook():
+    """Webhook para procesar pagos (demo)"""
+    try:
+        event = request.get_json()
+        # In a real application, verify webhook signature
+        # Process the event, e.g., update user's premium status
+        print(f"Received payment webhook event: {event.get('type')}")
+        return jsonify({'success': True, 'message': 'Webhook recibido'}), 200
+    except Exception as e:
+        print(f"Error in payment_webhook: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': 'Error interno del servidor'}), 500
 
-@app.route('/favicon.ico')
-def serve_favicon():
-    """Servir favicon"""
-    return send_from_directory(STATIC_DIR, 'favicon.ico')
-
-# Catch-all route para servir la aplicación React
+# Rutas para servir el frontend (archivos estáticos)
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
-def serve_react_app(path):
-    """Servir la aplicación React para todas las rutas no API"""
-    # Si es una ruta de API, no servir React
-    if path.startswith('api/') or path.startswith('health'):
-        return jsonify({"error": "Endpoint no encontrado"}), 404
-    
-    # Servir index.html para todas las rutas de React Router
-    index_path = os.path.join(STATIC_DIR, 'index.html')
-    if os.path.exists(index_path):
-        return send_file(index_path)
+def serve_frontend(path):
+    """Sirve los archivos estáticos del frontend"""
+    print(f"Serving static file: {path}")
+    if path != "" and os.path.exists(os.path.join(STATIC_DIR, path)):
+        return send_from_directory(STATIC_DIR, path)
     else:
-        return jsonify({
-            "error": "Frontend no encontrado",
-            "message": "La aplicación React no está disponible"
-        }), 404
+        return send_from_directory(STATIC_DIR, 'index.html')
 
 if __name__ == '__main__':
-    print("🚀 Iniciando EdooConnect Flask Backend...")
-    
-    # Verificar que el frontend existe
-    if os.path.exists(STATIC_DIR):
-        print("✅ Frontend encontrado")
-    else:
-        print("⚠️ Frontend no encontrado en", STATIC_DIR)
-    
-    # Iniciar Flask
-    port = int(os.environ.get('PORT', 5000))
-    print(f"🌐 Iniciando servidor en puerto {port}")
-    app.run(host='0.0.0.0', port=port, debug=False)
-
+    # This block is for local development only
+    # Vercel will use a WSGI server (like Gunicorn) to run the app
+    print("Running Flask app in development mode...")
+    app.run(debug=True, host='0.0.0.0', port=5000)
